@@ -1,0 +1,417 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<title>CCTV Monitor - Floor Plan</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<style>
+  :root {
+    --bg: #0f1115;
+    --panel: #171a21;
+    --border: #2a2e38;
+    --text: #e6e8ec;
+    --muted: #8a8f9c;
+    --accent: #4f7cff;
+    --online: #35c46a;
+    --offline: #e5484d;
+    --unknown: #8a8f9c;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, Segoe UI, Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    display: flex;
+    height: 100vh;
+  }
+  #sidebar {
+    width: 320px;
+    background: var(--panel);
+    border-right: 1px solid var(--border);
+    padding: 16px;
+    overflow-y: auto;
+    flex-shrink: 0;
+  }
+  #main {
+    flex: 1;
+    overflow: auto;
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    padding: 24px;
+    position: relative;
+  }
+  h2 { font-size: 15px; margin: 0 0 10px; color: var(--text); }
+  h1 { font-size: 18px; margin: 0 0 20px; }
+  .section { margin-bottom: 24px; }
+  input[type="file"], input[type="text"] {
+    width: 100%;
+    padding: 8px;
+    margin-bottom: 8px;
+    background: #0d0f14;
+    border: 1px solid var(--border);
+    color: var(--text);
+    border-radius: 6px;
+    font-size: 13px;
+  }
+  button {
+    background: var(--accent);
+    color: white;
+    border: none;
+    padding: 8px 12px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 13px;
+  }
+  button.secondary { background: #2a2e38; }
+  button.danger { background: var(--offline); }
+  #cameraList { list-style: none; padding: 0; margin: 0; }
+  #cameraList li {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    margin-bottom: 6px;
+    font-size: 13px;
+  }
+  .dot {
+    width: 10px; height: 10px; border-radius: 50%;
+    flex-shrink: 0;
+  }
+  .dot.online { background: var(--online); box-shadow: 0 0 6px var(--online); }
+  .dot.offline { background: var(--offline); box-shadow: 0 0 6px var(--offline); }
+  .dot.unknown { background: var(--unknown); }
+  .cam-info { flex: 1; }
+  .cam-name { font-weight: 600; }
+  .cam-ip { color: var(--muted); font-size: 11px; }
+  #canvasWrap { position: relative; display: inline-block; }
+  #pdfCanvas { border: 1px solid var(--border); border-radius: 4px; display: block; background: white; }
+  .marker {
+    position: absolute;
+    width: 26px; height: 26px;
+    transform: translate(-50%, -50%);
+    cursor: pointer;
+    filter: drop-shadow(0 1px 3px rgba(0,0,0,0.7));
+  }
+  .marker svg { width: 100%; height: 100%; display: block; }
+  .marker.online svg { fill: var(--online); }
+  .marker.offline svg { fill: var(--offline); }
+  .marker.unknown svg { fill: var(--unknown); }
+  .marker::after {
+    content: attr(data-name);
+    position: absolute;
+    top: 20px; left: 50%;
+    transform: translateX(-50%);
+    background: #000a;
+    color: white;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 11px;
+    white-space: nowrap;
+    display: none;
+  }
+  .marker:hover::after { display: block; }
+  #emptyState {
+    color: var(--muted);
+    text-align: center;
+    margin-top: 80px;
+    font-size: 14px;
+  }
+  .muted-small { color: var(--muted); font-size: 11px; margin-top: -4px; margin-bottom: 10px; }
+
+  /* Modal live view */
+  #modalOverlay {
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,0.6);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+  }
+  #modalOverlay.show { display: flex; }
+  #modalBox {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    width: 380px;
+    max-width: 90vw;
+    padding: 16px;
+  }
+  .modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+  }
+  .modal-title {
+    font-size: 15px;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .modal-ip { color: var(--muted); font-size: 12px; margin-bottom: 12px; }
+  .stream-frame {
+    width: 100%;
+    aspect-ratio: 16/9;
+    background: #05060a;
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    margin-bottom: 4px;
+    border: 1px solid var(--border);
+  }
+  .stream-frame img { width: 100%; height: 100%; object-fit: cover; }
+  .stream-placeholder {
+    color: var(--muted);
+    font-size: 12px;
+    text-align: center;
+    padding: 20px;
+    line-height: 1.5;
+  }
+  #modalCloseBtn { background: #2a2e38; padding: 4px 10px; }
+</style>
+</head>
+<body>
+
+<div id="sidebar">
+  <h1>📹 CCTV Monitor</h1>
+
+  <div class="section">
+    <h2>1. Unggah Floor Plan (PDF)</h2>
+    <input type="file" id="floorplanInput" accept="application/pdf">
+    <div class="muted-small">Hanya halaman pertama PDF yang ditampilkan.</div>
+  </div>
+
+  <div class="section">
+    <h2>2. Tambah Kamera</h2>
+    <div class="muted-small">Klik pada denah untuk menandai lokasi kamera, lalu isi detailnya.</div>
+  </div>
+
+  <div class="section">
+    <h2>Daftar Kamera <span id="camCount" class="muted-small"></span></h2>
+    <ul id="cameraList"></ul>
+    <button class="secondary" id="refreshBtn" style="margin-top:8px;width:100%;">🔄 Cek Status Sekarang</button>
+    <div class="muted-small" id="lastAutoCheck" style="margin-top:8px;">Auto-cek tiap 30 detik · belum ada pengecekan</div>
+  </div>
+</div>
+
+<div id="main">
+  <div id="emptyState">Belum ada floor plan. Silakan unggah file PDF di panel kiri.</div>
+  <div id="canvasWrap" style="display:none;">
+    <canvas id="pdfCanvas"></canvas>
+  </div>
+</div>
+
+<div id="modalOverlay">
+  <div id="modalBox">
+    <div class="modal-header">
+      <div class="modal-title">
+        <span class="dot" id="modalDot"></span>
+        <span id="modalCamName"></span>
+      </div>
+      <button id="modalCloseBtn">✕</button>
+    </div>
+    <div class="modal-ip" id="modalCamIp"></div>
+    <div class="stream-frame" id="streamFrame"></div>
+  </div>
+</div>
+
+<script>
+pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+
+const canvas = document.getElementById('pdfCanvas');
+const ctx = canvas.getContext('2d');
+const canvasWrap = document.getElementById('canvasWrap');
+const emptyState = document.getElementById('emptyState');
+let cameras = [];
+
+async function loadFloorplan() {
+  const res = await fetch('/api/floorplan');
+  const data = await res.json();
+  if (data.floorplan) {
+    await renderPdf(data.floorplan);
+  }
+}
+
+async function renderPdf(url) {
+  const loadingTask = pdfjsLib.getDocument(url);
+  const pdf = await loadingTask.promise;
+  const page = await pdf.getPage(1);
+  const viewport = page.getViewport({ scale: 1.5 });
+  canvas.width = viewport.width;
+  canvas.height = viewport.height;
+  await page.render({ canvasContext: ctx, viewport }).promise;
+  emptyState.style.display = 'none';
+  canvasWrap.style.display = 'inline-block';
+  renderMarkers();
+}
+
+document.getElementById('floorplanInput').addEventListener('change', async (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  const formData = new FormData();
+  formData.append('floorplan', file);
+  const res = await fetch('/api/floorplan', { method: 'POST', body: formData });
+  const data = await res.json();
+  if (data.floorplan) await renderPdf(data.floorplan);
+});
+
+canvas.addEventListener('click', async (e) => {
+  const rect = canvas.getBoundingClientRect();
+  const xFrac = (e.clientX - rect.left) / rect.width;
+  const yFrac = (e.clientY - rect.top) / rect.height;
+
+  const name = prompt('Nama kamera (mis. "Lobby Depan"):');
+  if (!name) return;
+  const ip = prompt('Alamat IP kamera (mis. 192.168.1.50):');
+  if (!ip) return;
+  const streamUrl = prompt(
+    'URL live view / snapshot kamera (opsional, kosongkan jika belum ada):\ncontoh: http://192.168.1.50/snapshot.jpg atau http://192.168.1.50/video'
+  ) || '';
+
+  const res = await fetch('/api/cameras', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name, ip, x: xFrac, y: yFrac, streamUrl })
+  });
+  const cam = await res.json();
+  cameras.push(cam);
+  renderMarkers();
+  renderList();
+});
+
+// --- Modal live view ---
+const modalOverlay = document.getElementById('modalOverlay');
+const modalCamName = document.getElementById('modalCamName');
+const modalCamIp = document.getElementById('modalCamIp');
+const modalDot = document.getElementById('modalDot');
+const streamFrame = document.getElementById('streamFrame');
+
+const statusLabelMap = { online: 'Online', offline: 'Offline', unknown: 'Belum dicek' };
+
+function openCameraModal(cam) {
+  modalCamName.textContent = cam.name;
+  modalCamIp.textContent = `${cam.ip} · ${statusLabelMap[cam.status] || 'Belum dicek'}`;
+  modalDot.className = 'dot ' + cam.status;
+  streamFrame.innerHTML = '';
+
+  if (cam.streamUrl) {
+    const img = document.createElement('img');
+    img.src = cam.streamUrl + (cam.streamUrl.includes('?') ? '&' : '?') + 'ts=' + Date.now();
+    img.onerror = () => {
+      streamFrame.innerHTML =
+        '<div class="stream-placeholder">Gagal memuat live view dari URL ini.<br>Periksa alamat snapshot/stream kamera, atau pastikan kamera bisa diakses dari browser ini.</div>';
+    };
+    streamFrame.appendChild(img);
+  } else {
+    streamFrame.innerHTML =
+      '<div class="stream-placeholder">Belum ada URL live view/snapshot untuk kamera ini.<br>Edit kamera dan isi URL snapshot/MJPEG dari kameranya.</div>';
+  }
+
+  modalOverlay.classList.add('show');
+}
+
+function closeCameraModal() {
+  modalOverlay.classList.remove('show');
+  streamFrame.innerHTML = '';
+}
+
+document.getElementById('modalCloseBtn').addEventListener('click', closeCameraModal);
+modalOverlay.addEventListener('click', (e) => {
+  if (e.target === modalOverlay) closeCameraModal();
+});
+
+const CCTV_ICON_SVG = `
+  <svg viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg">
+    <circle cx="16" cy="16" r="15" fill="white" opacity="0.0"/>
+    <path d="M4 8a2 2 0 012-2h11a2 2 0 012 2v3.2l6.4-3.6a1 1 0 011.5.9v9a1 1 0 01-1.5.9L19 14.8V18a2 2 0 01-2 2H6a2 2 0 01-2-2V8z"/>
+    <circle cx="10.5" cy="12" r="2.4" fill="white" fill-opacity="0.55"/>
+    <rect x="8" y="22" width="6" height="2" rx="1"/>
+    <rect x="10" y="20" width="2" height="3"/>
+  </svg>`;
+
+function renderMarkers() {
+  canvasWrap.querySelectorAll('.marker').forEach(m => m.remove());
+  const rect = canvas.getBoundingClientRect();
+  cameras.forEach(cam => {
+    const el = document.createElement('div');
+    el.className = 'marker ' + cam.status;
+    el.style.left = (cam.x * canvas.width) + 'px';
+    el.style.top = (cam.y * canvas.height) + 'px';
+    el.innerHTML = CCTV_ICON_SVG;
+    el.setAttribute('data-name', `${cam.name} (${cam.ip})`);
+    el.title = 'Klik untuk lihat live view · klik kanan untuk hapus';
+    el.addEventListener('click', (ev) => {
+      ev.stopPropagation();
+      openCameraModal(cam);
+    });
+    el.addEventListener('contextmenu', async (ev) => {
+      ev.preventDefault();
+      if (confirm(`Hapus kamera "${cam.name}"?`)) {
+        await fetch('/api/cameras/' + cam.id, { method: 'DELETE' });
+        cameras = cameras.filter(c => c.id !== cam.id);
+        renderMarkers();
+        renderList();
+      }
+    });
+    canvasWrap.appendChild(el);
+  });
+}
+
+function renderList() {
+  const list = document.getElementById('cameraList');
+  document.getElementById('camCount').textContent = `(${cameras.length})`;
+  list.innerHTML = '';
+  cameras.forEach(cam => {
+    const li = document.createElement('li');
+    const lastChecked = cam.lastChecked
+      ? new Date(cam.lastChecked).toLocaleTimeString('id-ID')
+      : 'belum dicek';
+    li.innerHTML = `
+      <span class="dot ${cam.status}"></span>
+      <span class="cam-info">
+        <div class="cam-name">${cam.name}</div>
+        <div class="cam-ip">${cam.ip} · ${lastChecked}</div>
+      </span>
+    `;
+    list.appendChild(li);
+  });
+}
+
+async function loadCameras() {
+  const res = await fetch('/api/cameras');
+  cameras = await res.json();
+  renderMarkers();
+  renderList();
+}
+
+async function checkStatus() {
+  if (cameras.length === 0) return;
+  const res = await fetch('/api/ping-status');
+  cameras = await res.json();
+  renderMarkers();
+  renderList();
+  const label = document.getElementById('lastAutoCheck');
+  if (label) {
+    label.textContent = 'Auto-cek tiap 30 detik · terakhir: ' + new Date().toLocaleTimeString('id-ID');
+  }
+}
+
+document.getElementById('refreshBtn').addEventListener('click', checkStatus);
+
+(async function init() {
+  await loadFloorplan();
+  await loadCameras();
+  await checkStatus();
+  setInterval(checkStatus, 30000); // auto refresh tiap 30 detik
+})();
+</script>
+
+</body>
+</html>
