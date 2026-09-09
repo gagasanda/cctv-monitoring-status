@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <title>CCTV Monitor - Floor Plan</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.17/dist/hls.min.js"></script>
 <style>
   :root {
     --bg: #0f1115;
@@ -304,19 +305,54 @@ function openCameraModal(cam) {
   streamFrame.innerHTML = '';
 
   if (cam.streamUrl) {
-    const img = document.createElement('img');
-    img.src = cam.streamUrl + (cam.streamUrl.includes('?') ? '&' : '?') + 'ts=' + Date.now();
-    img.onerror = () => {
-      streamFrame.innerHTML =
-        '<div class="stream-placeholder">Gagal memuat live view dari URL ini.<br>Periksa alamat snapshot/stream kamera, atau pastikan kamera bisa diakses dari browser ini.</div>';
-    };
-    streamFrame.appendChild(img);
+    if (/^rtsps?:\/\//i.test(cam.streamUrl)) {
+      loadHlsStream(cam);
+    } else {
+      const img = document.createElement('img');
+      img.src = cam.streamUrl + (cam.streamUrl.includes('?') ? '&' : '?') + 'ts=' + Date.now();
+      img.onerror = () => showStreamError();
+      streamFrame.appendChild(img);
+    }
   } else {
     streamFrame.innerHTML =
       '<div class="stream-placeholder">Belum ada URL live view/snapshot untuk kamera ini.<br>Edit kamera dan isi URL snapshot/MJPEG dari kameranya.</div>';
   }
 
   modalOverlay.classList.add('show');
+}
+
+function showStreamError(message = 'Gagal memuat live view. Periksa URL kamera dan pastikan FFmpeg dapat mengakses stream tersebut.') {
+  streamFrame.innerHTML = `<div class="stream-placeholder">${message}</div>`;
+}
+
+async function loadHlsStream(cam) {
+  try {
+    const res = await fetch('/api/cameras/' + cam.id + '/hls');
+    const data = await res.json();
+    if (!res.ok) return showStreamError(data.error);
+
+    const video = document.createElement('video');
+    video.controls = true;
+    video.autoplay = true;
+    video.muted = true;
+    video.playsInline = true;
+    streamFrame.appendChild(video);
+
+    if (video.canPlayType('application/vnd.apple.mpegurl')) {
+      video.src = data.url;
+    } else if (window.Hls && Hls.isSupported()) {
+      const hls = new Hls({ liveSyncDurationCount: 2 });
+      hls.loadSource(data.url);
+      hls.attachMedia(video);
+      hls.on(Hls.Events.ERROR, (_, error) => {
+        if (error.fatal) showStreamError();
+      });
+    } else {
+      showStreamError('Browser ini tidak mendukung pemutaran HLS.');
+    }
+  } catch (error) {
+    showStreamError();
+  }
 }
 
 function closeCameraModal() {

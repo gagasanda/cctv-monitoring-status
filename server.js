@@ -3,7 +3,7 @@ const multer = require('multer');
 const cors = require('cors');
 const path = require('path');
 const fs = require('fs');
-const { exec } = require('child_process');
+const { exec, spawn } = require('child_process');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -11,10 +11,14 @@ const PORT = process.env.PORT || 3000;
 const DATA_DIR = path.join(__dirname, 'data');
 const DB_FILE = path.join(DATA_DIR, 'db.json');
 const UPLOAD_DIR = path.join(__dirname, 'uploads');
+const STREAM_DIR = path.join(__dirname, 'streams');
+const FFMPEG_PATH = process.env.FFMPEG_PATH || 'ffmpeg';
+const hlsProcesses = new Map();
 
 // Pastikan folder yang dibutuhkan ada
 if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
 if (!fs.existsSync(UPLOAD_DIR)) fs.mkdirSync(UPLOAD_DIR, { recursive: true });
+if (!fs.existsSync(STREAM_DIR)) fs.mkdirSync(STREAM_DIR, { recursive: true });
 if (!fs.existsSync(DB_FILE)) {
   fs.writeFileSync(DB_FILE, JSON.stringify({ floorplan: null, cameras: [] }, null, 2));
 }
@@ -30,6 +34,57 @@ app.use(cors());
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 app.use('/uploads', express.static(UPLOAD_DIR));
+app.use('/streams', express.static(STREAM_DIR));
+
+function isRtspUrl(url) {
+  return typeof url === 'string' && /^rtsps?:\/\//i.test(url);
+}
+
+function startHlsStream(camera) {
+  const existing = hlsProcesses.get(camera.id);
+  if (existing) return existing;
+
+  const outputDir = path.join(STREAM_DIR, camera.id);
+  fs.rmSync(outputDir, { recursive: true, force: true });
+  fs.mkdirSync(outputDir, { recursive: true });
+  const outputFile = path.join(outputDir, 'index.m3u8');
+  const ffmpeg = spawn(FFMPEG_PATH, [
+    '-hide_banner', '-loglevel', 'warning',
+    '-rtsp_transport', 'tcp',
+    '-i', camera.streamUrl,
+    '-an', '-c:v', 'libx264', '-preset', 'veryfast', '-tune', 'zerolatency',
+    '-f', 'hls', '-hls_time', '1', '-hls_list_size', '3',
+    '-hls_flags', 'delete_segments+append_list+omit_endlist',
+    '-hls_segment_filename', path.join(outputDir, 'segment-%03d.ts'),
+    outputFile
+  ]);
+
+  const stream = { process: ffmpeg, outputDir };
+  hlsProcesses.set(camera.id, stream);
+  ffmpeg.on('error', (error) => {
+    console.error(`FFmpeg gagal untuk kamera ${camera.id}: ${error.message}`);
+    hlsProcesses.delete(camera.id);
+  });
+  ffmpeg.on('exit', () => hlsProcesses.delete(camera.id));
+  return stream;
+}
+
+function stopHlsStream(cameraId) {
+  const stream = hlsProcesses.get(cameraId);
+  if (!stream) return;
+  stream.process.kill('SIGTERM');
+  hlsProcesses.delete(cameraId);
+}
+
+app.get('/api/cameras/:id/hls', (req, res) => {
+  const camera = readDB().cameras.find(c => c.id === req.params.id);
+  if (!camera) return res.status(404).json({ error: 'Kamera tidak ditemukan' });
+  if (!isRtspUrl(camera.streamUrl)) {
+    return res.status(400).json({ error: 'URL kamera bukan URL RTSP' });
+  }
+  startHlsStream(camera);
+  res.json({ url: `/streams/${camera.id}/index.m3u8` });
+});
 
 // --- Upload floor plan (PDF) ---
 const storage = multer.diskStorage({
@@ -96,9 +151,11 @@ app.put('/api/cameras/:id', (req, res) => {
   if (!name || !ip) {
     return res.status(400).json({ error: 'name dan ip wajib diisi' });
   }
+  const nextStreamUrl = typeof streamUrl === 'string' ? streamUrl.trim() : '';
+  if (cam.streamUrl !== nextStreamUrl) stopHlsStream(cam.id);
   cam.name = name.trim();
   cam.ip = ip.trim();
-  cam.streamUrl = typeof streamUrl === 'string' ? streamUrl.trim() : '';
+  cam.streamUrl = nextStreamUrl;
   writeDB(db);
   res.json(cam);
 });
@@ -107,6 +164,7 @@ app.delete('/api/cameras/:id', (req, res) => {
   const db = readDB();
   const exists = db.cameras.some(c => c.id === req.params.id);
   if (!exists) return res.status(404).json({ error: 'Kamera tidak ditemukan' });
+  stopHlsStream(req.params.id);
   db.cameras = db.cameras.filter(c => c.id !== req.params.id);
   writeDB(db);
   res.json({ success: true });
@@ -137,4 +195,9 @@ app.get('/api/ping-status', async (req, res) => {
 
 app.listen(PORT, () => {
   console.log(`CCTV Monitor berjalan di http://localhost:${PORT}`);
+});
+
+process.on('SIGINT', () => {
+  for (const cameraId of hlsProcesses.keys()) stopHlsStream(cameraId);
+  process.exit(0);
 });

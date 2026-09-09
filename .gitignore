@@ -3,6 +3,7 @@ node_modules/
 
 # Runtime data
 uploads/*
+streams/*
 data/db.json
 
 # Environment variables

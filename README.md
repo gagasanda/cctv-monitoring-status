@@ -16,6 +16,14 @@ Prototipe sederhana untuk:
    npm start
    ```
 
+  Saat `npm install` berjalan, aplikasi akan mengecek FFmpeg. Pada server Debian/Ubuntu,
+  FFmpeg akan dipasang otomatis menggunakan `apt-get` dan `sudo` bila diperlukan.
+  Pada Windows, installer akan mencoba `winget`, lalu Chocolatey (`choco`).
+  Pastikan user yang menjalankan instalasi memiliki izin memasang software.
+
+  Jika FFmpeg dipasang melalui Windows, buka terminal baru setelah `npm install` agar
+  perubahan PATH terbaca, lalu jalankan `npm start`.
+
 3. Buka browser ke `http://localhost:3000`
 
 ## Cara Pakai
@@ -34,11 +42,13 @@ Saat kamu klik marker kamera, popup kecil muncul menampilkan gambar dari URL yan
 
 - **Kamera dengan snapshot URL** (mis. `http://192.168.1.50/snapshot.jpg`) — popup akan menampilkan gambar terbaru dari URL tersebut, di-refresh tiap kali popup dibuka.
 - **Kamera dengan MJPEG stream URL** (mis. `http://192.168.1.50/video`) — kalau kameramu mendukung MJPEG over HTTP, popup bisa menampilkannya sebagai video langsung (karena elemen `<img>` browser bisa merender stream MJPEG).
+- **Kamera dengan RTSP URL** (mis. `rtsp://user:password@192.168.1.50:554/Streaming/Channels/101`) — aplikasi akan menjalankan FFmpeg di server dan mengubahnya menjadi HLS agar bisa diputar di browser.
 - **Kamera tanpa URL** — popup akan menampilkan pesan bahwa live view belum diset.
 
 **Penting:** Browser modern **tidak bisa** memutar stream RTSP secara langsung (protokol paling umum dipakai CCTV/DVR). Kalau CCTV kamu hanya punya RTSP, kamu perlu:
-- Cek apakah kamera/DVR-mu juga expose endpoint HTTP snapshot/MJPEG (banyak merk seperti Hikvision, Dahua, dsb punya ini secara default), atau
-- Pasang proxy transcoding seperti `go2rtc`, `MediaMTX`, atau `ffmpeg` yang mengubah RTSP jadi HLS/MJPEG yang bisa ditampilkan browser, lalu masukkan URL hasil transcoding tersebut sebagai "URL live view" kamera.
+- Pastikan FFmpeg sudah terpasang di server dan perintah `ffmpeg` tersedia di PATH. Jika lokasinya berbeda, jalankan server dengan `FFMPEG_PATH=/path/ke/ffmpeg npm start`.
+- Masukkan URL RTSP kamera pada field URL live view/snapshot, lalu buka marker kamera.
+- Untuk Honeywell, format URL RTSP berbeda menurut model. Gunakan URL RTSP dari konfigurasi atau manual perangkat.
 
 ## Catatan Penting
 

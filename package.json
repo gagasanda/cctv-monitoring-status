@@ -4,6 +4,7 @@
   "description": "Prototype sistem monitoring CCTV: floor plan PDF + marker lokasi kamera + status ping online/offline",
   "main": "server.js",
   "scripts": {
+    "postinstall": "node scripts/install-ffmpeg.js",
     "start": "node server.js"
   },
   "dependencies": {
