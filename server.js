@@ -50,10 +50,12 @@ function startHlsStream(camera) {
   const outputFile = path.join(outputDir, 'index.m3u8');
   const ffmpeg = spawn(FFMPEG_PATH, [
     '-hide_banner', '-loglevel', 'warning',
+    '-fflags', 'nobuffer', '-flags', 'low_delay',
+    '-probesize', '32k', '-analyzeduration', '0',
     '-rtsp_transport', 'tcp',
     '-i', camera.streamUrl,
-    '-an', '-c:v', 'libx264', '-preset', 'veryfast', '-tune', 'zerolatency',
-    '-f', 'hls', '-hls_time', '1', '-hls_list_size', '3',
+    '-an', '-c:v', 'copy',
+    '-f', 'hls', '-hls_time', '0.5', '-hls_list_size', '3',
     '-hls_flags', 'delete_segments+append_list+omit_endlist',
     '-hls_segment_filename', path.join(outputDir, 'segment-%03d.ts'),
     outputFile
@@ -69,6 +71,18 @@ function startHlsStream(camera) {
   return stream;
 }
 
+function waitForFile(filePath, timeoutMs = 10000) {
+  return new Promise((resolve) => {
+    const startedAt = Date.now();
+    const check = () => {
+      if (fs.existsSync(filePath)) return resolve(true);
+      if (Date.now() - startedAt >= timeoutMs) return resolve(false);
+      setTimeout(check, 100);
+    };
+    check();
+  });
+}
+
 function stopHlsStream(cameraId) {
   const stream = hlsProcesses.get(cameraId);
   if (!stream) return;
@@ -76,13 +90,18 @@ function stopHlsStream(cameraId) {
   hlsProcesses.delete(cameraId);
 }
 
-app.get('/api/cameras/:id/hls', (req, res) => {
+app.get('/api/cameras/:id/hls', async (req, res) => {
   const camera = readDB().cameras.find(c => c.id === req.params.id);
   if (!camera) return res.status(404).json({ error: 'Kamera tidak ditemukan' });
   if (!isRtspUrl(camera.streamUrl)) {
     return res.status(400).json({ error: 'URL kamera bukan URL RTSP' });
   }
-  startHlsStream(camera);
+  const stream = startHlsStream(camera);
+  const ready = await waitForFile(path.join(stream.outputDir, 'index.m3u8'));
+  if (!ready) {
+    stopHlsStream(camera.id);
+    return res.status(503).json({ error: 'Stream kamera belum siap atau FFmpeg gagal membacanya' });
+  }
   res.json({ url: `/streams/${camera.id}/index.m3u8` });
 });
 

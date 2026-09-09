@@ -43,6 +43,10 @@ Saat kamu klik marker kamera, popup kecil muncul menampilkan gambar dari URL yan
 - **Kamera dengan snapshot URL** (mis. `http://192.168.1.50/snapshot.jpg`) — popup akan menampilkan gambar terbaru dari URL tersebut, di-refresh tiap kali popup dibuka.
 - **Kamera dengan MJPEG stream URL** (mis. `http://192.168.1.50/video`) — kalau kameramu mendukung MJPEG over HTTP, popup bisa menampilkannya sebagai video langsung (karena elemen `<img>` browser bisa merender stream MJPEG).
 - **Kamera dengan RTSP URL** (mis. `rtsp://user:password@192.168.1.50:554/Streaming/Channels/101`) — aplikasi akan menjalankan FFmpeg di server dan mengubahnya menjadi HLS agar bisa diputar di browser.
+
+Untuk mempercepat tampilan, stream H.264 dari kamera di-remux tanpa encoding ulang.
+Jika model kamera hanya mengirim codec yang tidak didukung browser, konfigurasi FFmpeg
+perlu diubah kembali ke transcoding H.264.
 - **Kamera tanpa URL** — popup akan menampilkan pesan bahwa live view belum diset.
 
 **Penting:** Browser modern **tidak bisa** memutar stream RTSP secara langsung (protokol paling umum dipakai CCTV/DVR). Kalau CCTV kamu hanya punya RTSP, kamu perlu:
