@@ -309,6 +309,10 @@ canvas.addEventListener('click', async (e) => {
     body: JSON.stringify({ name, ip, x: xFrac, y: yFrac, streamUrl })
   });
   const cam = await res.json();
+  if (!res.ok) {
+    alert(cam.error || 'Kamera gagal ditambahkan');
+    return;
+  }
   cameras.push(cam);
   renderMarkers();
   renderList();
@@ -388,6 +392,11 @@ function closeCameraModal() {
 document.getElementById('modalCloseBtn').addEventListener('click', closeCameraModal);
 modalOverlay.addEventListener('click', (e) => {
   if (e.target === modalOverlay) closeCameraModal();
+});
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && modalOverlay.classList.contains('show')) {
+    closeCameraModal();
+  }
 });
 
 const CCTV_ICON_SVG = `
