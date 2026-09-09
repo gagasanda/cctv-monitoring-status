@@ -87,6 +87,8 @@
   .cam-info { flex: 1; }
   .cam-name { font-weight: 600; }
   .cam-ip { color: var(--muted); font-size: 11px; }
+  .cam-actions { display: flex; gap: 4px; }
+  .cam-actions button { padding: 4px 7px; font-size: 11px; }
   #canvasWrap { position: relative; display: inline-block; }
   #pdfCanvas { border: 1px solid var(--border); border-radius: 4px; display: block; background: white; }
   .marker {
@@ -197,7 +199,7 @@
     <h2>Daftar Kamera <span id="camCount" class="muted-small"></span></h2>
     <ul id="cameraList"></ul>
     <button class="secondary" id="refreshBtn" style="margin-top:8px;width:100%;">🔄 Cek Status Sekarang</button>
-    <div class="muted-small" id="lastAutoCheck" style="margin-top:8px;">Auto-cek tiap 30 detik · belum ada pengecekan</div>
+    <div class="muted-small" id="lastAutoCheck" style="margin-top:8px;">Auto-cek tiap 10 detik · belum ada pengecekan</div>
   </div>
 </div>
 
@@ -353,15 +355,46 @@ function renderMarkers() {
     });
     el.addEventListener('contextmenu', async (ev) => {
       ev.preventDefault();
-      if (confirm(`Hapus kamera "${cam.name}"?`)) {
-        await fetch('/api/cameras/' + cam.id, { method: 'DELETE' });
-        cameras = cameras.filter(c => c.id !== cam.id);
-        renderMarkers();
-        renderList();
-      }
+      await deleteCamera(cam);
     });
     canvasWrap.appendChild(el);
   });
+}
+
+async function editCamera(cam) {
+  const name = prompt('Nama kamera:', cam.name);
+  if (name === null) return;
+  const ip = prompt('Alamat IP kamera:', cam.ip);
+  if (ip === null) return;
+  const streamUrl = prompt('URL live view / snapshot kamera:', cam.streamUrl || '');
+  if (streamUrl === null) return;
+
+  const res = await fetch('/api/cameras/' + cam.id, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name, ip, streamUrl })
+  });
+  const updatedCam = await res.json();
+  if (!res.ok) {
+    alert(updatedCam.error || 'Kamera gagal diperbarui');
+    return;
+  }
+  cameras = cameras.map(item => item.id === cam.id ? updatedCam : item);
+  renderMarkers();
+  renderList();
+}
+
+async function deleteCamera(cam) {
+  if (!confirm(`Hapus kamera "${cam.name}"?`)) return;
+  const res = await fetch('/api/cameras/' + cam.id, { method: 'DELETE' });
+  if (!res.ok) {
+    const data = await res.json();
+    alert(data.error || 'Kamera gagal dihapus');
+    return;
+  }
+  cameras = cameras.filter(item => item.id !== cam.id);
+  renderMarkers();
+  renderList();
 }
 
 function renderList() {
@@ -379,7 +412,13 @@ function renderList() {
         <div class="cam-name">${cam.name}</div>
         <div class="cam-ip">${cam.ip} · ${lastChecked}</div>
       </span>
+      <span class="cam-actions">
+        <button class="secondary edit-camera" type="button">Edit</button>
+        <button class="danger delete-camera" type="button">Hapus</button>
+      </span>
     `;
+    li.querySelector('.edit-camera').addEventListener('click', () => editCamera(cam));
+    li.querySelector('.delete-camera').addEventListener('click', () => deleteCamera(cam));
     list.appendChild(li);
   });
 }
@@ -399,7 +438,7 @@ async function checkStatus() {
   renderList();
   const label = document.getElementById('lastAutoCheck');
   if (label) {
-    label.textContent = 'Auto-cek tiap 30 detik · terakhir: ' + new Date().toLocaleTimeString('id-ID');
+    label.textContent = 'Auto-cek tiap 10 detik · terakhir: ' + new Date().toLocaleTimeString('id-ID');
   }
 }
 
@@ -409,7 +448,7 @@ document.getElementById('refreshBtn').addEventListener('click', checkStatus);
   await loadFloorplan();
   await loadCameras();
   await checkStatus();
-  setInterval(checkStatus, 30000); // auto refresh tiap 30 detik
+  setInterval(checkStatus, 10000); // auto refresh tiap 10 detik
 })();
 </script>
 

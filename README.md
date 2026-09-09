@@ -4,7 +4,7 @@ Prototipe sederhana untuk:
 - Mengunggah floor plan / denah dalam bentuk **PDF**
 - Menandai lokasi setiap **CCTV** langsung di atas denah
 - Mengecek status **online/offline** tiap kamera dengan **ping** ke alamat IP-nya
-- Auto-refresh status setiap 15 detik
+- Auto-refresh status setiap 10 detik
 
 ## Cara Menjalankan
 
@@ -25,7 +25,7 @@ Prototipe sederhana untuk:
 3. Isi nama kamera (mis. "Lobby Depan"), alamat IP-nya (mis. `192.168.1.50`), dan opsional URL live view/snapshot kamera (lihat bagian "Live View" di bawah).
 4. Marker berbentuk ikon kamera akan muncul: **abu-abu** (belum dicek), **hijau** (online), **merah** (offline).
 5. **Klik marker kamera** untuk membuka popup live view.
-6. Klik tombol **"Cek Status Sekarang"** untuk memaksa pengecekan ulang, atau tunggu auto-refresh tiap 30 detik.
+6. Klik tombol **"Cek Status Sekarang"** untuk memaksa pengecekan ulang, atau tunggu auto-refresh tiap 10 detik.
 7. Klik kanan pada marker untuk menghapus kamera tersebut.
 
 ## Live View (Popup)

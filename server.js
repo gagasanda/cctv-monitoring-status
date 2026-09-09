@@ -92,13 +92,21 @@ app.put('/api/cameras/:id', (req, res) => {
   const db = readDB();
   const cam = db.cameras.find(c => c.id === req.params.id);
   if (!cam) return res.status(404).json({ error: 'Kamera tidak ditemukan' });
-  Object.assign(cam, req.body);
+  const { name, ip, streamUrl } = req.body;
+  if (!name || !ip) {
+    return res.status(400).json({ error: 'name dan ip wajib diisi' });
+  }
+  cam.name = name.trim();
+  cam.ip = ip.trim();
+  cam.streamUrl = typeof streamUrl === 'string' ? streamUrl.trim() : '';
   writeDB(db);
   res.json(cam);
 });
 
 app.delete('/api/cameras/:id', (req, res) => {
   const db = readDB();
+  const exists = db.cameras.some(c => c.id === req.params.id);
+  if (!exists) return res.status(404).json({ error: 'Kamera tidak ditemukan' });
   db.cameras = db.cameras.filter(c => c.id !== req.params.id);
   writeDB(db);
   res.json({ success: true });
